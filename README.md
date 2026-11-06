@@ -43,11 +43,13 @@ Then open http://localhost:8080/.
 
 Each person types their name on first open. The app remembers them after that, and **Settings → Switch user** changes who is signed in.
 
+**Starting the plan:** there's no fixed start date. Each person taps **Start my plan** on the Today screen, and week 1 begins on the following Monday (tapping on a Monday also starts the *next* Monday, so everyone gets a full first week). Until then the app shows a countdown, and any workouts logged count as practice. **Settings → Plan start** lets you cancel before it begins, or restart from next Monday later; restarting keeps all workouts, habits and scans and only resets the week count, deload weeks and milestone dates.
+
 ## Edit the plan
 
 Everything about the people and the training plan is in `data.js`:
 
-- `USERS`: names, start dates, daily targets (calories, protein, steps, sleep), the starting body scan and monthly milestones.
+- `USERS`: names, daily targets (calories, protein, steps, sleep), the starting body scan and monthly milestones.
 - `WEEKLY_TARGETS`, `DELOAD_WEEKS`, `PLAN_WEEKS`.
 - `WORKOUTS`: the four workouts in `WORKOUT_ORDER`. Each exercise has `sets`, `reps: [min, max]`, `rest` (seconds), `tier` (`core` / `full` / `extra`, which controls what appears at 45 / 60 / 75 minutes), an optional `cue`, `superset`, `inc` (kg to add when the top of the range is hit, default 2.5), `assisted` (assist kg goes down as you get stronger) and `perSide`.
 - `IMAGES`: equipment photo filenames in `images/equipment/`. The service worker precaches every file listed here.

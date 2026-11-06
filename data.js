@@ -10,16 +10,18 @@
  * not touch `window` or `document`.
  */
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 
-/* ---------- People ---------- */
+/* ---------- People ----------
+ * There is no fixed start date: each person taps "Start my plan" in the app and
+ * week 1 begins on the following Monday (saved in their own data).
+ */
 
 const USERS = {
   abey: {
     id: 'abey',
     name: 'Abey',
     goalType: 'cut',
-    startDate: '2026-11-09',
     startWeight: 71.1,
     goalWeight: 60,
     goalText: '60 kg',
@@ -35,7 +37,6 @@ const USERS = {
     id: 'sudheep',
     name: 'Sudheep',
     goalType: 'cut',
-    startDate: '2026-11-09',
     startWeight: 71.2,
     goalWeight: 60,
     goalText: '60 kg',
@@ -52,7 +53,6 @@ const USERS = {
     id: 'ashik',
     name: 'Ashik',
     goalType: 'recomp',
-    startDate: '2026-11-09',
     startWeight: 59.6,
     goalText: 'Stay 58–61 kg, body fat ≤ 20%, muscle ≥ 43 kg',
     weightBand: [58, 61],

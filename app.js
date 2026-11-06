@@ -77,7 +77,7 @@ const Store = {
 function freshData(user) {
   return {
     schemaVersion: SCHEMA_VERSION,
-    settings: { sessionLength: DEFAULT_SESSION_LENGTH, tipDismissed: false, persistAsked: false, sound: true },
+    settings: { sessionLength: DEFAULT_SESSION_LENGTH, startDate: null, tipDismissed: false, persistAsked: false, sound: true },
     sessions: {},
     habits: {},
     scans: [Object.assign({ id: 'start' }, user.startScan)],
@@ -101,6 +101,7 @@ function migrate(data, user) {
   const base = freshData(user);
   d.settings = Object.assign({}, base.settings, d.settings || {});
   if (!SESSION_LENGTHS.includes(d.settings.sessionLength)) d.settings.sessionLength = DEFAULT_SESSION_LENGTH;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(d.settings.startDate))) d.settings.startDate = null;
   if (!d.sessions || typeof d.sessions !== 'object' || Array.isArray(d.sessions)) d.sessions = {};
   if (!d.habits || typeof d.habits !== 'object' || Array.isArray(d.habits)) d.habits = {};
   if (!Array.isArray(d.scans)) d.scans = base.scans;
@@ -164,10 +165,26 @@ function logout() {
 
 /* ================= plan logic ================= */
 
-function weekNumber(user, date = now()) {
-  return Math.floor(daysBetween(mondayOf(parseYmd(user.startDate)), mondayOf(date)) / 7) + 1;
+/* Each person starts their plan by tapping Start: week 1 then begins on next week's Monday. */
+const planStart = () => (S.data && S.data.settings.startDate) || null;
+const nextMonday = (d = now()) => ymd(addDays(mondayOf(d), 7));
+/* Used for milestone dates and chart ranges before someone has tapped Start. */
+const planStartOrNext = () => planStart() || nextMonday();
+
+/* Plan week for a date: 1 = the start week; 0 or less = before the plan (or not started). */
+function weekNumber(date = now()) {
+  const start = planStart();
+  if (!start) return 0;
+  return Math.floor(daysBetween(parseYmd(start), mondayOf(date)) / 7) + 1;
 }
-function weekNumberOfStart(user, weekStart) { return weekNumber(user, parseYmd(weekStart)); }
+function weekNumberOfStart(weekStart) { return weekNumber(parseYmd(weekStart)); }
+
+function startPlan() {
+  S.data.settings.startDate = nextMonday();
+  save();
+  toast(`Locked in: week 1 starts <strong>${fmtDayLong(S.data.settings.startDate)}</strong>`, { ms: 4000 });
+  route();
+}
 const isDeload = (weekNo) => DELOAD_WEEKS.includes(weekNo);
 
 /* Exercises (with sets for this length / deload), finisher amount and time estimate. */
@@ -494,23 +511,39 @@ function renderLogin(error = '') {
 function renderToday() {
   setChrome('today');
   const u = S.user;
-  const wk = weekNumber(u);
+  const wk = weekNumber();
   const weekStart = thisWeekStart();
   const len = S.data.settings.sessionLength;
   const summary = weekSummary(weekStart);
   const today = todayStr();
   const h = S.data.habits[today] || {};
 
-  const headLine = wk >= 1
-    ? `Week ${wk} of plan`
-    : `Plan starts ${fmtDayLong(u.startDate)}`;
+  const start = planStart();
+  const headLine = wk >= 1 ? `Week ${wk} of plan` : start ? `Plan starts ${fmtDayLong(start)}` : 'Plan not started';
+
+  let startCard = '';
+  if (!start) {
+    startCard = `<div class="card hero">
+      <div class="eyebrow">Your ${PLAN_WEEKS}-week plan</div>
+      <div class="big">Ready to start?</div>
+      <p class="muted" style="margin-top:6px">Tap Start and week 1 begins on <strong>${fmtDayLong(nextMonday())}</strong>. Until then you can try the workouts and log habits.</p>
+      <button type="button" class="btn block" data-action="start-plan">Start my plan</button>
+    </div>`;
+  } else if (wk < 1) {
+    const days = daysBetween(now(), parseYmd(start));
+    startCard = `<div class="card hero">
+      <div class="eyebrow">Plan locked in</div>
+      <div class="big">Week 1 starts ${fmtDayLong(start)}</div>
+      <p class="muted" style="margin-top:6px">${days === 1 ? 'Tomorrow' : `In ${days} days`}. Workouts before then count as practice.</p>
+    </div>`;
+  }
 
   let nextCard;
   if (summary.next) {
     const p = prescribe(summary.next.wid, len, isDeload(wk));
     const state = sessionState(summary.next.session);
-    nextCard = `<div class="card hero">
-      <div class="eyebrow">Next workout · ${WORKOUT_ORDER.indexOf(summary.next.wid) + 1} of 4</div>
+    nextCard = `<div class="card${startCard ? '' : ' hero'}">
+      <div class="eyebrow">${wk >= 1 ? 'Next workout' : 'Practice workout'} · ${WORKOUT_ORDER.indexOf(summary.next.wid) + 1} of 4</div>
       <div class="card-head"><div><div class="big">${esc(p.workout.name)}</div>
         <div class="muted">≈ ${roundTo5(p.minutes)} min · ${p.exercises.length} exercises${p.deload ? ' · deload' : ''}</div></div></div>
       <div class="spacer"></div>
@@ -530,6 +563,7 @@ function renderToday() {
     <h1>Hi ${esc(u.name)}</h1>
     <p class="sub">${headLine} · ${fmtDayLong(today)}</p>
     ${deloadBanner(wk)}
+    ${startCard}
     ${tip}
     ${nextCard}
     <h2>Today's habits</h2>
@@ -545,7 +579,7 @@ function renderPlan() {
   setChrome('plan');
   const u = S.user;
   const weekStart = thisWeekStart();
-  const wk = weekNumber(u);
+  const wk = weekNumber();
   const summary = weekSummary(weekStart);
   const len = S.data.settings.sessionLength;
 
@@ -565,13 +599,13 @@ function renderPlan() {
 
   // Past weeks: from the plan start (or the earliest logged session) up to last week.
   const starts = Object.values(S.data.sessions).map((s) => s.weekStart).filter(Boolean);
-  let first = ymd(mondayOf(parseYmd(u.startDate)));
+  let first = planStart() || weekStart;
   for (const s of starts) if (s < first) first = s;
   const past = [];
   for (let d = addDays(parseYmd(weekStart), -7); ymd(d) >= first; d = addDays(d, -7)) {
     const ws = ymd(d);
     const sm = weekSummary(ws);
-    const n = weekNumberOfStart(u, ws);
+    const n = weekNumberOfStart(ws);
     past.push(`<div class="week-row"><span>${n >= 1 ? `Week ${n}` : 'Before plan'} · <span class="muted">${fmtDay(ws)}</span>${isDeload(n) ? ' <span class="tag">Deload</span>' : ''}</span>
       <span class="dots">${sm.items.map((x) => `<i class="${sessionState(x.session) === 'done' ? 'on' : ''}"></i>`).join('')}</span>
       <b class="num">${sm.done}/4</b></div>`);
@@ -580,7 +614,7 @@ function renderPlan() {
 
   app().innerHTML = `
     <h1>Plan</h1>
-    <p class="sub">${wk >= 1 ? `Week ${wk} of ${PLAN_WEEKS}` : `Starts ${fmtDayLong(u.startDate)}`} · ${summary.done}/4 sessions · ${len}-min sessions</p>
+    <p class="sub">${wk >= 1 ? `Week ${wk} of ${PLAN_WEEKS}` : planStart() ? `Starts ${fmtDayLong(planStart())}` : 'Not started yet (tap Start on Today)'} · ${summary.done}/4 sessions · ${len}-min sessions</p>
     ${deloadBanner(wk)}
     <div class="session-list">${items}</div>
     <p class="muted small" style="margin-top:10px">Do them in order, on any days that suit your shifts. The week runs Monday to Sunday.</p>
@@ -598,7 +632,7 @@ function currentSession(create) {
   if (!s && create) {
     const t = Date.now();
     s = S.data.sessions[W.sid] = {
-      id: W.sid, workoutId: W.wid, weekStart: W.weekStart, weekNo: weekNumberOfStart(S.user, W.weekStart),
+      id: W.sid, workoutId: W.wid, weekStart: W.weekStart, weekNo: weekNumberOfStart(W.weekStart),
       status: 'in_progress', startedAt: t, updatedAt: t, warmup: false, finisher: false, sets: {},
     };
   }
@@ -617,7 +651,7 @@ function renderWorkout(wid) {
   const weekStart = thisWeekStart();
   const sid = sessionId(weekStart, wid);
   const existing = S.data.sessions[sid];
-  const wk = weekNumberOfStart(S.user, weekStart);
+  const wk = weekNumberOfStart(weekStart);
   const len = existing && existing.status === 'done' && existing.sessionLength ? existing.sessionLength : S.data.settings.sessionLength;
   const p = prescribe(wid, len, isDeload(wk));
   W = { wid, weekStart, sid, p };
@@ -809,7 +843,7 @@ function renderHabits() {
   const weekStart = S.habitsWeek || current;
   const start = parseYmd(weekStart);
   const today = todayStr();
-  const wk = weekNumberOfStart(u, weekStart);
+  const wk = weekNumberOfStart(weekStart);
   const counts = weeklyCounts(weekStart);
 
   // Gym days: finished sessions by their finish date (within this week).
@@ -869,7 +903,7 @@ function toggleHabit(btn) {
 function sortedScans() { return S.data.scans.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)); }
 
 function milestoneList(u) {
-  const start = parseYmd(u.startDate);
+  const start = parseYmd(planStartOrNext());
   return u.milestones.values.map((v, i) => {
     const week = (i + 1) * MILESTONE_EVERY_WEEKS;
     return { week, date: ymd(addDays(start, week * 7 - 1)), target: v };
@@ -980,8 +1014,8 @@ function renderProgress() {
   const latest = scans[scans.length - 1];
   const recomp = u.goalType === 'recomp';
   const ms = milestoneList(u);
-  const xFrom = first ? first.date : u.startDate;
-  let xTo = ymd(addDays(parseYmd(u.startDate), PLAN_WEEKS * 7 - 1));
+  const xFrom = first ? first.date : planStartOrNext();
+  let xTo = ymd(addDays(parseYmd(planStartOrNext()), PLAN_WEEKS * 7 - 1));
   if (ms[ms.length - 1].date > xTo) xTo = ms[ms.length - 1].date;
   if (latest && latest.date > xTo) xTo = latest.date;
   const delta = (k) => (latest && first && latest[k] != null && first[k] != null ? latest[k] - first[k] : null);
@@ -1049,7 +1083,7 @@ function renderProgress() {
   const msTable = `<div class="table-wrap"><table>
     <thead><tr><th>Checkpoint</th><th>Target ${recomp ? 'fat' : 'weight'}</th><th>Actual</th>${recomp ? '<th class="c">Muscle</th>' : ''}<th class="c"></th></tr></thead>
     <tbody>${msRows}</tbody></table></div>
-    <p class="muted tiny" style="margin-top:8px">Actual uses the scan closest to each checkpoint (within 10 days).${recomp ? ` Muscle should rise or hold at ${fmt1(first.muscleKg)} kg.` : ''}</p>`;
+    <p class="muted tiny" style="margin-top:8px">${planStart() ? '' : `Dates assume you start on ${fmtDayLong(nextMonday())}; they lock in when you tap Start. `}Actual uses the scan closest to each checkpoint (within 10 days).${recomp ? ` Muscle should rise or hold at ${fmt1(first.muscleKg)} kg.` : ''}</p>`;
 
   /* scan list */
   const scanItems = scans.slice().reverse().map((s) => {
@@ -1124,10 +1158,22 @@ function renderSettings() {
   setChrome('settings');
   const u = S.user;
   const st = S.data.settings;
-  const wk = weekNumber(u);
+  const wk = weekNumber();
   app().innerHTML = `
     <h1>Settings</h1>
     <p class="sub">Signed in as <strong>${esc(u.name)}</strong> · ${esc(u.goalText)}</p>
+
+    <div class="card setting">
+      <h3>Plan start</h3>
+      ${!planStart()
+        ? `<p>Not started. Tap Start and week 1 begins on ${fmtDayLong(nextMonday())}.</p>
+           <button type="button" class="btn" data-action="start-plan">Start my plan</button>`
+        : wk < 1
+          ? `<p>Week 1 starts ${fmtDayLong(planStart())}.</p>
+             <button type="button" class="btn ghost" data-action="cancel-start">Cancel start</button>`
+          : `<p>Started ${fmtDayLong(planStart())} · week ${wk} of ${PLAN_WEEKS}. Restarting keeps all your workouts, habits and scans; only the week count starts again.</p>
+             <button type="button" class="btn ghost" data-action="restart-plan">Restart from ${fmtDayLong(nextMonday())}</button>`}
+    </div>
 
     <div class="card setting">
       <h3>Session length</h3>
@@ -1296,6 +1342,11 @@ function onClick(ev) {
         renderProgress();
       }
       break;
+    case 'start-plan': startPlan(); break;
+    case 'restart-plan':
+      if (confirm(`Restart your plan? Week 1 will begin ${fmtDayLong(nextMonday())}. Your workouts, habits and scans are kept.`)) startPlan();
+      break;
+    case 'cancel-start': S.data.settings.startDate = null; save(); toast('Start cancelled'); route(); break;
     case 'export': exportBackup(); break;
     case 'switch-user': logout(); break;
     case 'reset': resetData(); break;
