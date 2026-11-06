@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Gym Crew</title>
+  <meta name="description" content="Workout and habit tracker for the crew.">
+  <meta name="theme-color" content="#0b0b0d">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gym Crew">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="banner" class="banner" hidden></div>
+  <main id="app" class="app" aria-live="polite"></main>
+
+  <div id="timer" class="timer" hidden>
+    <div class="timer-bar"><div class="timer-fill"></div></div>
+    <div class="timer-row">
+      <div class="timer-text"><span class="timer-label"></span><strong class="timer-left"></strong></div>
+      <button type="button" class="btn small ghost" data-action="timer-add">+15 s</button>
+      <button type="button" class="btn small ghost" data-action="timer-skip">Skip</button>
+    </div>
+  </div>
+
+  <nav id="tabs" class="tabs" hidden aria-label="Main">
+    <a href="#/today" data-tab="today"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/></svg><span>Today</span></a>
+    <a href="#/plan" data-tab="plan"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h2V7h2v10H5v-3H3zm18 0h-2V7h-2v10h2v-3h2zM8 11h8v2H8z"/></svg><span>Plan</span></a>
+    <a href="#/habits" data-tab="habits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zm9 0h7v7h-7zM4 13h7v7H4zm9 3.5l2 2 4-4.5 1.4 1.4-5.4 5.6-3.4-3.1z"/></svg><span>Habits</span></a>
+    <a href="#/progress" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19h18v2H3zM5 16l4-5 4 3 5-7 1.6 1.2-6.2 8.6-4-3L6.6 17.2z"/></svg><span>Progress</span></a>
+    <a href="#/settings" data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5zm8.4 5l-1.6-.9a7 7 0 0 0 0-1.2l1.6-.9-2-3.5-1.6.9a7 7 0 0 0-1-.6V5h-4v1.8a7 7 0 0 0-1 .6l-1.6-.9-2 3.5 1.6.9a7 7 0 0 0 0 1.2l-1.6.9 2 3.5 1.6-.9a7 7 0 0 0 1 .6V19h4v-1.8a7 7 0 0 0 1-.6l1.6.9z"/></svg><span>Settings</span></a>
+  </nav>
+
+  <div id="viewer" class="viewer" hidden role="dialog" aria-label="Equipment photo"><img alt=""></div>
+  <div id="toast" class="toast" hidden role="status"></div>
+
+  <noscript><p class="noscript">Gym Crew needs JavaScript.</p></noscript>
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
