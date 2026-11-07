@@ -343,6 +343,35 @@ details.card[open] > summary { margin-bottom: 12px; }
 .tabs svg { width: 24px; height: 24px; fill: currentColor; }
 .tabs a.active { color: var(--accent); }
 
+/* ---------- how-to sheet ---------- */
+.howto-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-top: 8px; padding: 0 12px;
+  border-radius: 999px; border: 1px solid rgba(245,166,35,.5); background: var(--accent-soft); color: var(--accent);
+  font-size: 14px; font-weight: 700; cursor: pointer; touch-action: manipulation;
+}
+.howto-btn span { font-size: 11px; }
+.sheet {
+  position: fixed; inset: 0; z-index: 65; background: rgba(0,0,0,.7);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet-card {
+  width: 100%; max-width: 560px; max-height: calc(100dvh - var(--safe-top) - 12px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 20px 20px 0 0;
+  padding: 14px var(--gutter) calc(var(--safe-bottom) + 16px);
+}
+@media (min-width: 600px) { .sheet { align-items: center; } .sheet-card { border-radius: 20px; } }
+.sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.sheet-head h3 { font-size: 19px; line-height: 1.25; }
+.howto-stage { position: relative; background: #101013; border: 1px solid var(--line); border-radius: 14px; cursor: pointer; }
+.howto-stage svg { display: block; width: 100%; height: auto; max-height: 44vh; }
+.howto-word {
+  position: absolute; left: 12px; top: 10px; font-size: 15px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--accent);
+}
+.howto-controls { margin: 10px 0 4px; }
+.howto-steps { margin: 8px 0 14px; padding-left: 22px; font-size: 15px; line-height: 1.45; }
+.howto-steps li { margin-bottom: 6px; }
+.howto-steps li.cue-step { color: var(--accent); font-weight: 600; }
+
 /* ---------- photo viewer ---------- */
 .viewer {
   position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.94);

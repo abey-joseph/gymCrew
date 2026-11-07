@@ -1,6 +1,6 @@
 /* Gym Crew service worker: cache-first, fully offline after the first load.
  * Bump CACHE_VERSION whenever any file changes so phones pick up the new version. */
-const CACHE_VERSION = 'gymcrew-v1.1.0';
+const CACHE_VERSION = 'gymcrew-v1.2.0';
 
 importScripts('./data.js'); // provides IMAGES and IMAGE_DIR
 

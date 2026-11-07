@@ -10,7 +10,7 @@
  * not touch `window` or `document`.
  */
 
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 
 /* ---------- People ----------
  * There is no fixed start date: each person taps "Start my plan" in the app and
@@ -207,5 +207,196 @@ const WORKOUTS = {
       { id: 'leg-extension-b', lift: 'leg-extension', name: 'Leg extension', image: 'leg-extension.jpg', sets: 2, reps: [15, 15], rest: 60, tier: 'extra' },
     ],
     finisher: { name: 'StairMaster', image: 'treadmill-stairmaster.jpg', unit: 'min', amounts: { 45: 5, 60: 10, 75: 15 } },
+  },
+};
+
+/* ---------- "How to" animations ----------
+ * One entry per movement, keyed by exercise `lift` (or `id`). The app draws a simple figure
+ * and loops it from pose `a` (start) to pose `b` (end of the effort) and back.
+ *
+ * Canvas: 200 × 160, floor at y = 150. Angles are in degrees: 0 = up, 90 = right
+ * (the way the figure faces), 180 = down, 270 = left. Each limb angle is absolute.
+ *
+ * view 'side'  : figure faces right.
+ *   hx, hy  hip position   (or ax, ay = ankle position, keeps the foot planted)
+ *   t torso · ua upper arm · fa forearm · th thigh · sh shin · ft foot
+ *   th2, sh2, ft2 far leg (lunges, split stance)
+ * view 'front' : figure faces you. ua/fa/th/sh are for the arm/leg on your right;
+ *   the other side mirrors it unless ual/fal are given. ths shortens the thigh (seated).
+ * view 'top'   : seen from above, forward is up. ua/fa as in 'front'.
+ *
+ * props: equipment. Fixed: rect [x,y,w,h], line [x1,y1,x2,y2] (+w width).
+ *   Attached: db / grip at the hands, pad / plate at a joint (`at`), backpad along the torso,
+ *   cable from point `from` to the hand, bar2 (front view bar between the hands, cable from `from`).
+ * tempo: seconds [a→b, hold at b, b→a, hold at a]. words: what to think in each direction.
+ */
+const HOWTO = {
+  'chest-press': {
+    view: 'side', words: ['Press', 'Return'], tempo: [1, 0.3, 1.8, 0.4],
+    props: [{ t: 'rect', p: [54, 118, 46, 7] }, { t: 'line', p: [77, 125, 77, 150], w: 5 }, { t: 'backpad' }, { t: 'grip' }],
+    a: { hx: 80, hy: 116, t: -12, ua: 245, fa: 92, th: 92, sh: 178 },
+    b: { ua: 95, fa: 90 },
+    steps: ['Set the seat so the handles line up with mid-chest.', 'Shoulder blades back and down, then press forward until the arms are long, without locking the elbows.', 'Bring the handles back slowly, about 2 seconds.'],
+  },
+  'seated-row': {
+    view: 'side', words: ['Pull', 'Reach'], tempo: [1, 1, 1.6, 0.3],
+    props: [{ t: 'rect', p: [54, 118, 46, 7] }, { t: 'line', p: [77, 125, 77, 150], w: 5 }, { t: 'rect', p: [92, 80, 7, 28] }, { t: 'grip' }],
+    a: { hx: 80, hy: 116, t: 5, ua: 95, fa: 95, th: 92, sh: 178 },
+    b: { ua: 215, fa: 85 },
+    steps: ['Chest on the pad, feet planted.', 'Pull your elbows back past your body and squeeze your shoulder blades for 1 second.', 'Let the arms go long again without leaving the pad.'],
+  },
+  'db-shoulder-press': {
+    view: 'front', words: ['Press', 'Lower'], tempo: [1, 0.2, 1.6, 0.3],
+    props: [{ t: 'rect', p: [84, 56, 32, 52] }, { t: 'rect', p: [78, 106, 44, 6] }, { t: 'db' }],
+    a: { hx: 100, hy: 106, ua: 95, fa: 0, th: 170, sh: 180, ths: 0.35 },
+    b: { ua: 15, fa: 5 },
+    steps: ['Bench upright, back against the pad, dumbbells at shoulder height.', 'Press up until the arms are straight overhead, dumbbells close together.', "Lower back to the shoulders. Don't arch your lower back."],
+  },
+  'lat-pulldown': {
+    view: 'front', words: ['Pull', 'Up'], tempo: [1, 0.3, 1.8, 0.3],
+    props: [{ t: 'rect', p: [78, 106, 44, 6] }, { t: 'rect', p: [82, 99, 36, 6] }, { t: 'bar2', from: [100, 2] }],
+    a: { hx: 100, hy: 106, ua: 25, fa: 15, th: 170, sh: 180, ths: 0.35 },
+    b: { ua: 135, fa: -20 },
+    steps: ['Thighs under the pad, wide grip on the bar.', 'Pull the bar to your upper chest, driving the elbows down and in.', 'Let it rise slowly until your arms are straight.'],
+  },
+  'cable-curl': {
+    view: 'side', words: ['Curl', 'Lower'], tempo: [1, 0.3, 1.8, 0.2],
+    props: [{ t: 'line', p: [152, 8, 152, 150], w: 6 }, { t: 'cable', from: [148, 144] }, { t: 'grip' }],
+    a: { ax: 100, ay: 150, t: 0, th: 180, sh: 180, ua: 180, fa: 178 },
+    b: { ua: 175, fa: 15 },
+    steps: ['Stand facing the low pulley, bar or handle in both hands.', 'Elbows pinned to your sides: curl up until the forearms are vertical.', 'Lower all the way down slowly.'],
+  },
+  'rope-pushdown': {
+    view: 'side', words: ['Push', 'Up'], tempo: [1, 0.5, 1.6, 0.2],
+    props: [{ t: 'line', p: [152, 8, 152, 150], w: 6 }, { t: 'cable', from: [148, 14] }, { t: 'grip' }],
+    a: { ax: 100, ay: 150, t: 8, th: 180, sh: 180, ua: 170, fa: 60 },
+    b: { ua: 175, fa: 180 },
+    steps: ['Rope on the high pulley, lean forward slightly, elbows at your sides.', 'Push down until the arms are straight and spread the rope at the bottom.', 'Let the hands come back up to chest height; elbows stay still.'],
+  },
+  'pec-fly': {
+    view: 'top', words: ['Squeeze', 'Open'], tempo: [1, 0.6, 1.8, 0.3],
+    props: [{ t: 'rect', p: [74, 102, 52, 9] }, { t: 'grip' }],
+    a: { ua: 95, fa: 70 },
+    b: { ua: 10, fa: -35 },
+    steps: ['Seen from above. Sit tall with your back on the pad, arms out wide, slight bend in the elbows.', 'Bring the hands together in front of your chest, like hugging a tree.', 'Open slowly until you feel a stretch across the chest.'],
+  },
+  'hack-squat': {
+    view: 'side', words: ['Down', 'Drive'], tempo: [1.8, 0.2, 1.2, 0.4], reverseWords: true,
+    props: [{ t: 'line', p: [96, 145, 140, 137], w: 6 }, { t: 'backpad' }, { t: 'pad', at: 'shoulder', dx: 0, dy: -4 }],
+    a: { ax: 112, ay: 140, ft: 80, t: -22, th: 175, sh: 185, ua: 150, fa: 10 },
+    b: { t: -30, th: 100, sh: 215, ua: 142, fa: 2 },
+    steps: ['Back flat on the pad, shoulders under the pads, feet shoulder-width on the platform.', 'Sit down as deep as you can control, knees tracking over your toes.', 'Drive back up through the whole foot without locking the knees.'],
+  },
+  'db-rdl': {
+    view: 'side', words: ['Hinge', 'Stand'], tempo: [1.8, 0.3, 1.2, 0.3], reverseWords: true,
+    props: [{ t: 'db' }],
+    a: { ax: 100, ay: 150, t: 0, th: 178, sh: 182, ua: 180, fa: 180 },
+    b: { t: 72, th: 150, sh: 190 },
+    steps: ['Stand tall with a dumbbell in each hand, knees soft.', 'Push your hips back and let the dumbbells slide down your legs. Flat back, until you feel the hamstrings.', 'Squeeze your glutes to stand back up.'],
+  },
+  'leg-extension': {
+    view: 'side', words: ['Kick', 'Lower'], tempo: [1, 1, 1.8, 0.3],
+    props: [{ t: 'rect', p: [54, 114, 48, 7] }, { t: 'line', p: [77, 121, 77, 150], w: 5 }, { t: 'backpad' }, { t: 'pad', at: 'ankle', dx: 4, dy: 0, z: 'front' }],
+    a: { hx: 80, hy: 112, t: -8, th: 90, sh: 180, ft: 100, ua: 175, fa: 120 },
+    b: { sh: 95, ft: 10 },
+    steps: ['Knees line up with the machine pivot, pad on your lower shins.', 'Straighten your legs and pause for 1 second at the top.', 'Lower slowly, but stop before the weight rests.'],
+  },
+  'walking-lunge': {
+    view: 'side', words: ['Step & drop', 'Stand'], tempo: [1.4, 0.3, 1.2, 0.3],
+    props: [{ t: 'db' }],
+    a: { hx: 100, hy: 84, t: 0, th: 180, sh: 180, th2: 180, sh2: 180, ft2: 90, ua: 180, fa: 180 },
+    b: { hx: 94, hy: 112, th: 97, sh: 182, th2: 200, sh2: 262, ft2: 120 },
+    steps: ['Dumbbells at your sides, stand tall.', 'Take a long step and drop the back knee towards the floor; front shin stays roughly vertical.', 'Push through the front heel and bring the back foot through into the next step.'],
+  },
+  'cable-crunch': {
+    view: 'side', words: ['Crunch', 'Up'], tempo: [1.2, 0.6, 1.6, 0.3],
+    props: [{ t: 'line', p: [168, 6, 168, 150], w: 6 }, { t: 'cable', from: [162, 10] }, { t: 'grip' }],
+    a: { hx: 86, hy: 114, t: 10, th: 178, sh: 270, ft: 270, ua: 150, fa: 330 },
+    b: { t: 75, ua: 215, fa: 395 },
+    steps: ['Kneel facing the high pulley, rope held beside your head.', 'Curl your ribs down towards your hips. Your hips stay still; only the spine bends.', 'Uncurl slowly back to upright.'],
+  },
+  'calf-raise': {
+    view: 'side', words: ['Rise', 'Lower'], tempo: [0.8, 1, 1.6, 0.6],
+    props: [{ t: 'line', p: [112, 6, 112, 150], w: 4 }, { t: 'rect', p: [96, 141, 22, 9] }, { t: 'plate', at: 'shoulder', r: 11, dx: -5, dy: 2 }],
+    a: { ax: 100, ay: 140, ft: 95, t: 0, th: 180, sh: 180, ua: 160, fa: 350 },
+    b: { ay: 132, ft: 135 },
+    steps: ['Smith bar across your upper back, balls of your feet on the edge of a plate.', 'Rise as high as you can onto your toes and hold for a second.', 'Lower until the heels sink below the plate for a full stretch.'],
+  },
+  'incline-db-press': {
+    view: 'side', words: ['Press', 'Lower'], tempo: [1, 0.2, 1.8, 0.3],
+    props: [{ t: 'backpad' }, { t: 'rect', p: [62, 117, 40, 7] }, { t: 'line', p: [80, 124, 80, 150], w: 5 }, { t: 'db' }],
+    a: { hx: 82, hy: 116, t: -58, th: 95, sh: 180, ua: 200, fa: 30 },
+    b: { ua: 30, fa: 34 },
+    steps: ['Bench at about 30°, dumbbells at the sides of your chest.', 'Press up and slightly back until the arms are straight over your upper chest.', 'Lower under control until you feel a stretch in the chest.'],
+  },
+  'assisted-pullup': {
+    view: 'side', words: ['Pull up', 'Lower'], tempo: [1.2, 0.4, 2, 0.3],
+    props: [{ t: 'line', p: [82, 22, 124, 22], w: 5 }, { t: 'line', p: [124, 6, 124, 150], w: 6 }, { t: 'pad', at: 'knee', dx: -2, dy: 4 }],
+    a: { hx: 100, hy: 112, t: 0, th: 178, sh: 262, ft: 180, ua: 2, fa: 2 },
+    b: { hy: 66, ua: 200, fa: 8 },
+    steps: ['Knees on the pad, hands on the bar a bit wider than shoulders.', 'Pull your chest up to the bar, driving the elbows down.', 'Lower all the way until your arms are straight. Lower the assist kg over the weeks.'],
+  },
+  'single-arm-cable-row': {
+    view: 'side', words: ['Row', 'Reach'], tempo: [1, 0.6, 1.6, 0.3],
+    props: [{ t: 'line', p: [178, 8, 178, 150], w: 6 }, { t: 'cable', from: [174, 60] }, { t: 'grip' }],
+    a: { hx: 96, hy: 84, t: 15, th: 168, sh: 182, th2: 195, sh2: 185, ua: 100, fa: 95 },
+    b: { ua: 210, fa: 95 },
+    steps: ['Pulley at chest height, staggered stance, one handle in one hand.', 'Row the elbow back past your ribs and squeeze.', 'Reach forward again, letting the shoulder blade move forward too.'],
+  },
+  'cable-lateral-raise': {
+    view: 'front', words: ['Raise', 'Lower'], tempo: [1, 0.3, 1.8, 0.2],
+    props: [{ t: 'line', p: [36, 8, 36, 150], w: 6 }, { t: 'cable', from: [40, 144] }, { t: 'grip', one: true }],
+    a: { hx: 100, hy: 84, th: 180, sh: 180, ua: 172, fa: 176, ual: 180, fal: 180 },
+    b: { ua: 92, fa: 96 },
+    steps: ['Stand side-on to the low pulley and hold the handle in the far hand, across your body.', 'Raise the arm out to the side up to shoulder height, elbow slightly bent.', 'Lower slowly. Do every rep on one arm, then switch.'],
+  },
+  'rear-delt-fly': {
+    view: 'top', words: ['Open', 'Return'], tempo: [1, 0.6, 1.6, 0.3],
+    props: [{ t: 'rect', p: [76, 76, 48, 7] }, { t: 'grip' }],
+    a: { ua: 5, fa: -15 },
+    b: { ua: 100, fa: 95 },
+    steps: ['Seen from above. Sit facing the pad, chest against it, arms straight out in front.', 'Sweep your arms out and back until they are in line with your shoulders.', 'Return slowly to the front.'],
+  },
+  'assisted-dip': {
+    view: 'side', words: ['Dip', 'Press'], tempo: [1.8, 0.2, 1, 0.3], reverseWords: true,
+    props: [{ t: 'line', p: [92, 101, 112, 101], w: 6 }, { t: 'line', p: [134, 6, 134, 150], w: 6 }, { t: 'pad', at: 'knee', dx: -2, dy: 4 }],
+    a: { hx: 100, hy: 90, t: 0, th: 178, sh: 262, ft: 180, ua: 180, fa: 180 },
+    b: { hy: 96, t: 14, ua: 215, fa: 160 },
+    steps: ['Knees on the pad, arms straight on the dip handles.', 'Lean slightly forward and bend the elbows until the upper arms are about level.', 'Press back up to straight arms.'],
+  },
+  'smith-squat': {
+    view: 'side', words: ['Down', 'Drive'], tempo: [1.8, 0.2, 1.2, 0.4], reverseWords: true,
+    props: [{ t: 'line', p: [108, 6, 108, 150], w: 4 }, { t: 'plate', at: 'shoulder', r: 11, dx: -5, dy: 2 }],
+    a: { ax: 112, ay: 150, t: 0, th: 180, sh: 180, ua: 160, fa: 350 },
+    b: { t: 18, th: 98, sh: 205, ua: 165, fa: 355 },
+    steps: ['Bar on your upper back, feet slightly in front of the bar.', 'Sit down and back until the thighs are about parallel.', 'Drive up through the whole foot.'],
+  },
+  'hip-thrust': {
+    view: 'side', words: ['Drive', 'Lower'], tempo: [1, 1, 1.6, 0.3],
+    props: [{ t: 'rect', p: [24, 118, 36, 32] }, { t: 'plate', at: 'hip', r: 15, dy: -8, z: 'front' }],
+    a: { hx: 88, hy: 138, t: -70, th: 58, sh: 174, ua: 110, fa: 110 },
+    b: { hx: 92, hy: 118, t: -90, th: 90, sh: 184, ua: 95, fa: 85 },
+    steps: ['Upper back on the bench edge, bar over your hips (use a pad), feet flat.', 'Drive your hips up until your body is flat from shoulders to knees. Chin tucked, squeeze the glutes 1 second.', 'Lower the hips under control.'],
+  },
+  'cable-pull-through': {
+    view: 'side', words: ['Stand tall', 'Hinge'], tempo: [1, 1, 1.6, 0.3],
+    props: [{ t: 'line', p: [34, 8, 34, 150], w: 6 }, { t: 'cable', from: [40, 144] }, { t: 'grip' }],
+    a: { ax: 110, ay: 150, t: 72, th: 152, sh: 188, ua: 212, fa: 222 },
+    b: { t: -4, th: 180, sh: 180, ua: 168, fa: 172 },
+    steps: ['Face away from the low pulley, rope between your legs, step forward.', 'Hinge: push the hips back, flat back, arms long between the legs.', 'Snap the hips forward to stand tall and squeeze the glutes.'],
+  },
+  'v-squat': {
+    view: 'side', words: ['Down', 'Drive'], tempo: [1.8, 0.2, 1.2, 0.4], reverseWords: true,
+    props: [{ t: 'rect', p: [96, 148, 44, 4] }, { t: 'pad', at: 'shoulder', dx: 0, dy: -5 }],
+    a: { ax: 112, ay: 148, t: 4, th: 178, sh: 182, ua: 165, fa: 30 },
+    b: { t: 22, th: 100, sh: 208, ua: 150, fa: 15 },
+    steps: ['Shoulders under the pads, feet in the middle of the platform.', 'Sit down deep with control, knees over toes.', 'Drive back up, keeping your chest up.'],
+  },
+  'plank': {
+    view: 'side', words: ['Hold', 'Hold'], tempo: [2, 0, 2, 0],
+    props: [],
+    a: { hx: 100, hy: 124, t: 80, th: 254, sh: 254, ft: 160, ua: 182, fa: 90 },
+    b: { hy: 123 },
+    steps: ['Forearms on the floor, elbows under your shoulders.', 'Body in one straight line: squeeze glutes and brace your stomach.', "Breathe normally and hold. Don't let the hips sag or pike up."],
   },
 };

@@ -52,6 +52,7 @@ Everything about the people and the training plan is in `data.js`:
 - `USERS`: names, daily targets (calories, protein, steps, sleep), the starting body scan and monthly milestones.
 - `WEEKLY_TARGETS`, `DELOAD_WEEKS`, `PLAN_WEEKS`.
 - `WORKOUTS`: the four workouts in `WORKOUT_ORDER`. Each exercise has `sets`, `reps: [min, max]`, `rest` (seconds), `tier` (`core` / `full` / `extra`, which controls what appears at 45 / 60 / 75 minutes), an optional `cue`, `superset`, `inc` (kg to add when the top of the range is hit, default 2.5), `assisted` (assist kg goes down as you get stronger) and `perSide`.
+- `HOWTO`: the "How to" animations, one per movement (keyed by the exercise `lift` or `id`). Each is a start pose and an end pose (joint angles), the equipment around the figure, the tempo, and 2–3 short steps. The comment above `HOWTO` explains the angles. A new exercise without an entry simply shows no How to button.
 - `IMAGES`: equipment photo filenames in `images/equipment/`. The service worker precaches every file listed here.
 
 Rules for safe edits:

@@ -402,6 +402,212 @@ function alertRestOver() {
   } catch (e) { /* ignore */ }
 }
 
+/* ================= "how to" animations ================= */
+
+const FIG = { torso: 44, sho: 41, neck: 12, head: 8.5, ua: 26, fa: 24, th: 34, sh: 32, foot: 10, shoW: 14, hipW: 8 };
+const C = { body: '#f3f3f5', far: '#7d7d88', kit: '#3a3a45', kitLine: '#55555f', weight: '#f5a623', cable: '#c9c9d1' };
+const dirv = (a) => { const r = (a * Math.PI) / 180; return [Math.sin(r), -Math.cos(r)]; };
+const go = (p, len, a) => { const d = dirv(a); return [p[0] + d[0] * len, p[1] + d[1] * len]; };
+const mirror = (a) => (a == null ? a : -a);
+
+function howtoFor(ex) { return HOWTO[ex.id] || HOWTO[ex.lift] || null; }
+
+function solvePose(view, q) {
+  const J = {};
+  if (view === 'side') {
+    if (q.ax != null) {
+      J.ankle = [q.ax, q.ay];
+      J.knee = go(J.ankle, -FIG.sh, q.sh);
+      J.hip = go(J.knee, -FIG.th, q.th);
+    } else {
+      J.hip = [q.hx, q.hy];
+      J.knee = go(J.hip, FIG.th, q.th);
+      J.ankle = go(J.knee, FIG.sh, q.sh);
+    }
+    J.toe = go(J.ankle, FIG.foot, q.ft == null ? 90 : q.ft);
+    if (q.th2 != null) {
+      J.knee2 = go(J.hip, FIG.th, q.th2);
+      J.ankle2 = go(J.knee2, FIG.sh, q.sh2);
+      J.toe2 = go(J.ankle2, FIG.foot, q.ft2 == null ? 90 : q.ft2);
+    }
+    J.neck = go(J.hip, FIG.torso, q.t);
+    J.head = go(J.neck, FIG.neck, q.t);
+    J.shoulder = go(J.hip, FIG.sho, q.t);
+    J.elbow = go(J.shoulder, FIG.ua, q.ua);
+    J.hand = go(J.elbow, FIG.fa, q.fa);
+    return J;
+  }
+  let shR; let shL;
+  if (view === 'top') {
+    shR = [118, 96]; shL = [82, 96];
+  } else {
+    J.hip = [q.hx, q.hy];
+    J.neck = [q.hx, q.hy - FIG.torso];
+    J.head = [q.hx, q.hy - FIG.torso - FIG.neck - 1];
+    shR = [q.hx + FIG.shoW, q.hy - FIG.sho]; shL = [q.hx - FIG.shoW, q.hy - FIG.sho];
+    const ths = q.ths == null ? 1 : q.ths;
+    J.hipR = [q.hx + FIG.hipW, q.hy]; J.hipL = [q.hx - FIG.hipW, q.hy];
+    J.knee = go(J.hipR, FIG.th * ths, q.th); J.ankle = go(J.knee, FIG.sh, q.sh);
+    J.kneeL = go(J.hipL, FIG.th * ths, mirror(q.th)); J.ankleL = go(J.kneeL, FIG.sh, mirror(q.sh));
+  }
+  J.shoulder = shR; J.shoulderL = shL;
+  J.elbow = go(shR, FIG.ua, q.ua); J.hand = go(J.elbow, FIG.fa, q.fa);
+  J.elbowL = go(shL, FIG.ua, mirror(q.ual == null ? q.ua : q.ual));
+  J.handL = go(J.elbowL, FIG.fa, mirror(q.fal == null ? q.fa : q.fal));
+  return J;
+}
+
+const f1 = (n) => n.toFixed(1);
+const pts = (...ps) => ps.map((p) => `${f1(p[0])},${f1(p[1])}`).join(' ');
+const limb = (ps, color, w = 7) => `<polyline points="${pts(...ps)}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+function drawProp(pr, J, view, q) {
+  const hands = view === 'side' || pr.one ? [J.hand] : [J.hand, J.handL];
+  switch (pr.t) {
+    case 'rect': return `<rect x="${pr.p[0]}" y="${pr.p[1]}" width="${pr.p[2]}" height="${pr.p[3]}" rx="3" fill="${C.kit}" stroke="${C.kitLine}"/>`;
+    case 'line': return `<line x1="${pr.p[0]}" y1="${pr.p[1]}" x2="${pr.p[2]}" y2="${pr.p[3]}" stroke="${C.kitLine}" stroke-width="${pr.w || 5}" stroke-linecap="round"/>`;
+    case 'backpad': {
+      const n = dirv(q.t - 90);
+      const a = go(J.hip, 2, q.t); const b = go(J.hip, FIG.torso + 2, q.t);
+      return `<line x1="${f1(a[0] + n[0] * 8)}" y1="${f1(a[1] + n[1] * 8)}" x2="${f1(b[0] + n[0] * 8)}" y2="${f1(b[1] + n[1] * 8)}" stroke="${C.kit}" stroke-width="9" stroke-linecap="round"/>`;
+    }
+    case 'pad': {
+      const j = J[pr.at];
+      return `<rect x="${f1(j[0] - 7 + (pr.dx || 0))}" y="${f1(j[1] - 7 + (pr.dy || 0))}" width="14" height="14" rx="4" fill="${C.kit}" stroke="${C.kitLine}"/>`;
+    }
+    case 'plate': {
+      const j = J[pr.at]; const cx = j[0] + (pr.dx || 0); const cy = j[1] + (pr.dy || 0);
+      return `<circle cx="${f1(cx)}" cy="${f1(cy)}" r="${pr.r || 16}" fill="rgba(245,166,35,0.12)" stroke="${C.weight}" stroke-width="2.5"/><circle cx="${f1(cx)}" cy="${f1(cy)}" r="3" fill="${C.weight}"/>`;
+    }
+    case 'db':
+      return hands.map((h) => (view === 'side'
+        ? `<circle cx="${f1(h[0])}" cy="${f1(h[1])}" r="6.5" fill="${C.weight}"/>`
+        : `<line x1="${f1(h[0] - 9)}" y1="${f1(h[1])}" x2="${f1(h[0] + 9)}" y2="${f1(h[1])}" stroke="${C.weight}" stroke-width="3"/><rect x="${f1(h[0] - 12)}" y="${f1(h[1] - 5)}" width="6" height="10" rx="1.5" fill="${C.weight}"/><rect x="${f1(h[0] + 6)}" y="${f1(h[1] - 5)}" width="6" height="10" rx="1.5" fill="${C.weight}"/>`)).join('');
+    case 'grip':
+      return hands.map((h) => `<circle cx="${f1(h[0])}" cy="${f1(h[1])}" r="4" fill="${C.weight}"/>`).join('');
+    case 'cable': {
+      const h = J.hand;
+      return `<circle cx="${pr.from[0]}" cy="${pr.from[1]}" r="4.5" fill="none" stroke="${C.kitLine}" stroke-width="2"/><line x1="${pr.from[0]}" y1="${pr.from[1]}" x2="${f1(h[0])}" y2="${f1(h[1])}" stroke="${C.cable}" stroke-width="1.4"/>`;
+    }
+    case 'bar2': {
+      const y = (J.hand[1] + J.handL[1]) / 2;
+      return `<line x1="${pr.from[0]}" y1="${pr.from[1]}" x2="${pr.from[0]}" y2="${f1(y)}" stroke="${C.cable}" stroke-width="1.4"/><line x1="${f1(J.handL[0] - 12)}" y1="${f1(y)}" x2="${f1(J.hand[0] + 12)}" y2="${f1(y)}" stroke="${C.weight}" stroke-width="4" stroke-linecap="round"/>`;
+    }
+    default: return '';
+  }
+}
+const BEHIND = new Set(['rect', 'line', 'backpad', 'pad', 'plate']);
+
+function drawFigure(view, J) {
+  let s = '';
+  if (view === 'side') {
+    if (J.knee2) s += limb([J.hip, J.knee2, J.ankle2, J.toe2], C.far);
+    s += limb([J.hip, J.neck], C.body, 9);
+    s += limb([J.hip, J.knee, J.ankle, J.toe], C.body);
+    s += `<circle cx="${f1(J.head[0])}" cy="${f1(J.head[1])}" r="${FIG.head}" fill="${C.body}"/>`;
+    s += limb([J.shoulder, J.elbow, J.hand], C.body, 6.5);
+    return s;
+  }
+  if (view === 'top') {
+    s += limb([J.shoulderL, J.elbowL, J.handL], C.body, 6.5) + limb([J.shoulder, J.elbow, J.hand], C.body, 6.5);
+    s += `<ellipse cx="100" cy="97" rx="23" ry="10" fill="${C.body}"/>`;
+    s += `<circle cx="100" cy="95" r="10" fill="#cfcfd6" stroke="#0b0b0d" stroke-width="1.5"/>`;
+    return s;
+  }
+  s += limb([J.hipL, J.kneeL, J.ankleL], C.body) + limb([J.hipR, J.knee, J.ankle], C.body);
+  s += limb([J.hipL, J.hipR], C.body, 8) + limb([J.hip, J.neck], C.body, 10);
+  s += limb([J.shoulderL, J.shoulder], C.body, 8);
+  s += limb([J.shoulderL, J.elbowL, J.handL], C.body, 6.5) + limb([J.shoulder, J.elbow, J.hand], C.body, 6.5);
+  s += `<circle cx="${f1(J.head[0])}" cy="${f1(J.head[1])}" r="${FIG.head + 1}" fill="${C.body}"/>`;
+  return s;
+}
+
+const lerpPose = (a, b, p) => {
+  const q = {};
+  for (const k of Object.keys(a)) q[k] = b[k] == null ? a[k] : a[k] + (b[k] - a[k]) * p;
+  return q;
+};
+
+/* Inner SVG for a movement at progress p (0 = start pose, 1 = end pose). */
+function howtoFrame(h, p) {
+  const q = lerpPose(h.a, Object.assign({}, h.a, h.b), p);
+  const J = solvePose(h.view, q);
+  const props = h.props || [];
+  let s = h.view === 'top' ? '' : '<line x1="6" y1="151.5" x2="194" y2="151.5" stroke="#2c2c34" stroke-width="3"/>';
+  for (const pr of props) if (BEHIND.has(pr.t) && pr.z !== 'front') s += drawProp(pr, J, h.view, q);
+  s += drawFigure(h.view, J);
+  for (const pr of props) if (!BEHIND.has(pr.t) || pr.z === 'front') s += drawProp(pr, J, h.view, q);
+  return s;
+}
+function howtoSVG(h, p) {
+  return `<svg viewBox="0 0 200 160" role="img" aria-hidden="true">${howtoFrame(h, p)}</svg>`;
+}
+
+const easeInOut = (x) => 0.5 - Math.cos(Math.PI * x) / 2;
+const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const HT = { h: null, raf: 0, t0: 0, pausedAt: null };
+
+/* Where in the rep cycle we are, t in seconds. */
+function howtoPhase(h, t) {
+  const [ab, hb, ba, ha] = h.tempo;
+  const total = ab + hb + ba + ha;
+  let x = total ? t % total : 0;
+  if (x < ab) return { p: easeInOut(x / ab), word: h.words[0] };
+  x -= ab;
+  if (x < hb) return { p: 1, word: h.words[0] === h.words[1] ? h.words[0] : 'Hold' };
+  x -= hb;
+  if (x < ba) return { p: 1 - easeInOut(x / ba), word: h.words[1] };
+  return { p: 0, word: h.words[1] === h.words[0] ? h.words[0] : 'Ready' };
+}
+
+function howtoTick() {
+  const sheet = $('#howto');
+  if (!HT.h || sheet.hidden) return;
+  const t = (HT.pausedAt != null ? HT.pausedAt : performance.now() - HT.t0) / 1000;
+  const ph = howtoPhase(HT.h, t);
+  $('#howto-fig').innerHTML = howtoFrame(HT.h, ph.p);
+  $('#howto-word').textContent = ph.word;
+  if (HT.pausedAt == null) HT.raf = requestAnimationFrame(howtoTick);
+}
+
+function openHowto(exId) {
+  const ex = findExercise(exId);
+  const h = ex && howtoFor(ex);
+  if (!h) return;
+  HT.h = h;
+  HT.t0 = performance.now();
+  HT.pausedAt = reduceMotion() ? 0 : null;
+  $('#howto-title').textContent = ex.name;
+  const [ab, hb, ba] = h.tempo;
+  $('#howto-tempo').textContent = ex.unit === 'secs'
+    ? `Hold ${ex.reps[0]}–${ex.reps[1]} s`
+    : `${h.words[0]} ${ab} s${hb >= 0.5 ? ` · hold ${hb} s` : ''} · ${h.words[1].toLowerCase()} ${ba} s`;
+  $('#howto-steps').innerHTML = h.steps.map((x) => `<li>${esc(x)}</li>`).join('')
+    + (ex.cue ? `<li class="cue-step">${esc(ex.cue)}</li>` : '');
+  $('#howto-view').textContent = h.view === 'top' ? 'Seen from above' : h.view === 'front' ? 'Seen from the front' : 'Seen from the side';
+  $('[data-action="howto-toggle"]').textContent = HT.pausedAt != null ? '▶ Play' : '❚❚ Pause';
+  $('#howto').hidden = false;
+  cancelAnimationFrame(HT.raf);
+  howtoTick();
+}
+function closeHowto() {
+  cancelAnimationFrame(HT.raf);
+  HT.h = null;
+  $('#howto').hidden = true;
+}
+function toggleHowto() {
+  if (!HT.h) return;
+  if (HT.pausedAt == null) {
+    HT.pausedAt = performance.now() - HT.t0;
+    cancelAnimationFrame(HT.raf);
+  } else {
+    HT.t0 = performance.now() - HT.pausedAt;
+    HT.pausedAt = null;
+  }
+  $('[data-action="howto-toggle"]').textContent = HT.pausedAt != null ? '▶ Play' : '❚❚ Pause';
+  howtoTick();
+}
+
 /* ================= toast ================= */
 
 let toastTimeout = null;
@@ -680,6 +886,7 @@ function renderWorkout(wid) {
         <div class="ex-info"><h3>${esc(ex.name)} <span class="check">✓</span></h3>
           <div class="presc">${ex.sets} × ${repsLabel}${ex.perSide ? ' each side' : ''} <span class="muted">· rest ${ex.rest ? ex.rest + ' s' : 'none, go straight to the next'}</span></div>
           ${ex.cue ? `<p class="cue">${esc(ex.cue)}</p>` : ''}
+          ${howtoFor(ex) ? `<button type="button" class="howto-btn" data-action="howto" data-ex="${ex.id}" aria-label="How to do ${esc(ex.name)}"><span aria-hidden="true">▶</span> How to</button>` : ''}
         </div></div>
       <div class="last">${last ? `Last time: ${esc(formatSets(ex, last.done))}` : 'No history yet.'}<span class="hint ${hint.cls}">${esc(hint.text)}</span></div>
       <div class="sets">
@@ -1301,6 +1508,7 @@ function route() {
     return;
   }
   if (name !== 'workout') W = null;
+  closeHowto();
   switch (name) {
     case 'today': renderToday(); break;
     case 'plan': renderPlan(); break;
@@ -1325,6 +1533,9 @@ function onClick(ev) {
       if (confirm('Finish now? Only the sets you ticked are saved.')) finishWorkout();
       break;
     case 'finisher-timer': startTimer(Number(el.dataset.min) * 60, 'Finisher'); break;
+    case 'howto': openHowto(el.dataset.ex); break;
+    case 'howto-close': closeHowto(); break;
+    case 'howto-toggle': toggleHowto(); break;
     case 'view-photo': openViewer(el.dataset.src, $('img', el).alt); break;
     case 'habit': toggleHabit(el); break;
     case 'dismiss-tip': S.data.settings.tipDismissed = true; save(); route(); break;
@@ -1409,7 +1620,9 @@ function boot() {
   document.addEventListener('click', onClick);
   document.addEventListener('input', onInput);
   $('#viewer').addEventListener('click', () => { $('#viewer').hidden = true; });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#viewer').hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#viewer').hidden = true; closeHowto(); } });
+  $('#howto').addEventListener('click', (e) => { if (e.target.id === 'howto') closeHowto(); });
+  $('#howto-stage').addEventListener('click', toggleHowto);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     updateTimer();

@@ -37,6 +37,25 @@
     <a href="#/settings" data-tab="settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5zm8.4 5l-1.6-.9a7 7 0 0 0 0-1.2l1.6-.9-2-3.5-1.6.9a7 7 0 0 0-1-.6V5h-4v1.8a7 7 0 0 0-1 .6l-1.6-.9-2 3.5 1.6.9a7 7 0 0 0 0 1.2l-1.6.9 2 3.5 1.6-.9a7 7 0 0 0 1 .6V19h4v-1.8a7 7 0 0 0 1-.6l1.6.9z"/></svg><span>Settings</span></a>
   </nav>
 
+  <div id="howto" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="howto-title">
+    <div class="sheet-card">
+      <div class="sheet-head">
+        <div><h3 id="howto-title"></h3><div class="muted tiny" id="howto-view"></div></div>
+        <button type="button" class="icon-btn" data-action="howto-close" aria-label="Close">✕</button>
+      </div>
+      <div class="howto-stage" id="howto-stage" title="Tap to pause">
+        <svg viewBox="0 0 200 160" aria-hidden="true"><g id="howto-fig"></g></svg>
+        <div class="howto-word" id="howto-word" aria-live="off"></div>
+      </div>
+      <div class="row howto-controls">
+        <button type="button" class="btn small ghost" data-action="howto-toggle">❚❚ Pause</button>
+        <span class="muted small grow" id="howto-tempo"></span>
+      </div>
+      <ol class="howto-steps" id="howto-steps"></ol>
+      <button type="button" class="btn block ghost" data-action="howto-close">Close</button>
+    </div>
+  </div>
+
   <div id="viewer" class="viewer" hidden role="dialog" aria-label="Equipment photo"><img alt=""></div>
   <div id="toast" class="toast" hidden role="status"></div>
 
