@@ -43,7 +43,7 @@ Then open http://localhost:8080/.
 
 Each person types their name on first open. The app remembers them after that, and **Settings → Switch user** changes who is signed in.
 
-**Starting the plan:** there's no fixed start date. Each person taps **Start my plan** on the Today screen, and week 1 begins on the following Monday (tapping on a Monday also starts the *next* Monday, so everyone gets a full first week). Until then the app shows a countdown, and any workouts logged count as practice. **Settings → Plan start** lets you cancel before it begins, or restart from next Monday later; restarting keeps all workouts, habits and scans and only resets the week count, deload weeks and milestone dates.
+**Starting the plan:** there's no fixed start date. Each person taps **Start my plan** on the Today screen, and week 1 begins on the following Sunday (tapping on a Sunday also starts the *next* Sunday, so everyone gets a full first week). Weeks run Sunday to Saturday. Until then the app shows a countdown, and any workouts logged count as practice. **Settings → Plan start** lets you cancel before it begins, or restart from next Sunday later; restarting keeps all workouts, habits and scans and only resets the week count, deload weeks and milestone dates.
 
 ## Edit the plan
 

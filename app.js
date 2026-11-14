@@ -14,13 +14,14 @@ const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate(
 const parseYmd = (s) => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
 const addDays = (d, n) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; };
 const daysBetween = (a, b) => Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 864e5);
-const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
+/* Weeks run Sunday to Saturday. */
+const weekStartOf = (d) => addDays(d, -d.getDay());
 const now = () => new Date();
 const todayStr = () => ymd(now());
-const thisWeekStart = () => ymd(mondayOf(now()));
+const thisWeekStart = () => ymd(weekStartOf(now()));
 const fmtDay = (s) => parseYmd(s).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 const fmtDayLong = (s) => parseYmd(s).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function toNum(v) {
   if (v === '' || v == null) return null;
@@ -42,7 +43,7 @@ const thousands = (n) => Math.round(n).toLocaleString('en-GB');
 
 /* ================= storage ================= */
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const KEY_PREFIX = 'gymcrew:v1:';
 const KEY_LAST_USER = 'gymcrew:lastUser';
 const timerKey = (uid) => `gymcrew:timer:${uid}`;
@@ -88,7 +89,33 @@ function freshData(user) {
  * stored shape changes, then bump SCHEMA_VERSION. Example for a renamed exercise id:
  *   1: (d) => { for (const s of Object.values(d.sessions)) if (s.sets['old-id']) { s.sets['new-id'] = s.sets['old-id']; delete s.sets['old-id']; } return d; },
  */
-const MIGRATIONS = {};
+const MIGRATIONS = {
+  /* 1 → 2: weeks moved from Monday–Sunday to Sunday–Saturday. Re-file each workout under the
+   * Sunday week it was started in, and move a Monday plan start to the Sunday before it. */
+  1: (d) => {
+    const old = d.sessions || {};
+    const sessions = {};
+    const list = Object.values(old).filter((x) => x && typeof x === 'object')
+      .sort((a, b) => (a.startedAt || 0) - (b.startedAt || 0));
+    for (const x of list) {
+      const when = x.startedAt > 86400000 ? new Date(x.startedAt) : x.weekStart ? parseYmd(x.weekStart) : null;
+      if (when) x.weekStart = ymd(weekStartOf(when));
+      let id = `${x.weekStart}_${x.workoutId}`;
+      if (sessions[id]) { // same workout twice in one new week: keep both, the later one stays current
+        const prev = sessions[id];
+        delete sessions[id];
+        prev.id = `${id}_${prev.startedAt || 'old'}`;
+        sessions[prev.id] = prev;
+      }
+      x.id = id;
+      sessions[id] = x;
+    }
+    d.sessions = sessions;
+    const sd = d.settings && d.settings.startDate;
+    if (sd && /^\d{4}-\d{2}-\d{2}$/.test(sd)) d.settings.startDate = ymd(weekStartOf(parseYmd(sd)));
+    return d;
+  },
+};
 
 function migrate(data, user) {
   let d = data && typeof data === 'object' ? data : {};
@@ -130,7 +157,7 @@ function save() {
 const S = {
   user: null,
   data: null,
-  habitsWeek: null, // Monday (YYYY-MM-DD) shown on the Habits screen
+  habitsWeek: null, // Sunday (YYYY-MM-DD) shown on the Habits screen
   timer: null, // { endsAt, total, label, fired }
 };
 
@@ -165,22 +192,22 @@ function logout() {
 
 /* ================= plan logic ================= */
 
-/* Each person starts their plan by tapping Start: week 1 then begins on next week's Monday. */
+/* Each person starts their plan by tapping Start: week 1 then begins on next Sunday. */
 const planStart = () => (S.data && S.data.settings.startDate) || null;
-const nextMonday = (d = now()) => ymd(addDays(mondayOf(d), 7));
+const nextSunday = (d = now()) => ymd(addDays(weekStartOf(d), 7));
 /* Used for milestone dates and chart ranges before someone has tapped Start. */
-const planStartOrNext = () => planStart() || nextMonday();
+const planStartOrNext = () => planStart() || nextSunday();
 
 /* Plan week for a date: 1 = the start week; 0 or less = before the plan (or not started). */
 function weekNumber(date = now()) {
   const start = planStart();
   if (!start) return 0;
-  return Math.floor(daysBetween(parseYmd(start), mondayOf(date)) / 7) + 1;
+  return Math.floor(daysBetween(parseYmd(start), weekStartOf(date)) / 7) + 1;
 }
 function weekNumberOfStart(weekStart) { return weekNumber(parseYmd(weekStart)); }
 
 function startPlan() {
-  S.data.settings.startDate = nextMonday();
+  S.data.settings.startDate = nextSunday();
   save();
   toast(`Locked in: week 1 starts <strong>${fmtDayLong(S.data.settings.startDate)}</strong>`, { ms: 4000 });
   route();
@@ -732,7 +759,7 @@ function renderToday() {
     startCard = `<div class="card hero">
       <div class="eyebrow">Your ${PLAN_WEEKS}-week plan</div>
       <div class="big">Ready to start?</div>
-      <p class="muted" style="margin-top:6px">Tap Start and week 1 begins on <strong>${fmtDayLong(nextMonday())}</strong>. Until then you can try the workouts and log habits.</p>
+      <p class="muted" style="margin-top:6px">Tap Start and week 1 begins on <strong>${fmtDayLong(nextSunday())}</strong>. Until then you can try the workouts and log habits.</p>
       <button type="button" class="btn block" data-action="start-plan">Start my plan</button>
     </div>`;
   } else if (wk < 1) {
@@ -757,7 +784,7 @@ function renderToday() {
     </div>`;
   } else {
     nextCard = `<div class="card hero"><div class="eyebrow">This week</div><div class="big">4/4 done ✓</div>
-      <p class="muted">Every session is in the bag. Rest up; the next round starts Monday.</p></div>`;
+      <p class="muted">Every session is in the bag. Rest up; the next round starts Sunday.</p></div>`;
   }
 
   const tip = S.data.settings.tipDismissed ? '' : `<div class="card tip">
@@ -823,7 +850,7 @@ function renderPlan() {
     <p class="sub">${wk >= 1 ? `Week ${wk} of ${PLAN_WEEKS}` : planStart() ? `Starts ${fmtDayLong(planStart())}` : 'Not started yet (tap Start on Today)'} · ${summary.done}/4 sessions · ${len}-min sessions</p>
     ${deloadBanner(wk)}
     <div class="session-list">${items}</div>
-    <p class="muted small" style="margin-top:10px">Do them in order, on any days that suit your shifts. The week runs Monday to Sunday.</p>
+    <p class="muted small" style="margin-top:10px">Do them in order, on any days that suit your shifts. The week runs Sunday to Saturday.</p>
     <h2>Past weeks</h2>
     ${past.length ? `<div class="weeks">${past.join('')}</div>` : '<p class="muted">No past weeks yet.</p>'}
   `;
@@ -1290,7 +1317,7 @@ function renderProgress() {
   const msTable = `<div class="table-wrap"><table>
     <thead><tr><th>Checkpoint</th><th>Target ${recomp ? 'fat' : 'weight'}</th><th>Actual</th>${recomp ? '<th class="c">Muscle</th>' : ''}<th class="c"></th></tr></thead>
     <tbody>${msRows}</tbody></table></div>
-    <p class="muted tiny" style="margin-top:8px">${planStart() ? '' : `Dates assume you start on ${fmtDayLong(nextMonday())}; they lock in when you tap Start. `}Actual uses the scan closest to each checkpoint (within 10 days).${recomp ? ` Muscle should rise or hold at ${fmt1(first.muscleKg)} kg.` : ''}</p>`;
+    <p class="muted tiny" style="margin-top:8px">${planStart() ? '' : `Dates assume you start on ${fmtDayLong(nextSunday())}; they lock in when you tap Start. `}Actual uses the scan closest to each checkpoint (within 10 days).${recomp ? ` Muscle should rise or hold at ${fmt1(first.muscleKg)} kg.` : ''}</p>`;
 
   /* scan list */
   const scanItems = scans.slice().reverse().map((s) => {
@@ -1373,13 +1400,13 @@ function renderSettings() {
     <div class="card setting">
       <h3>Plan start</h3>
       ${!planStart()
-        ? `<p>Not started. Tap Start and week 1 begins on ${fmtDayLong(nextMonday())}.</p>
+        ? `<p>Not started. Tap Start and week 1 begins on ${fmtDayLong(nextSunday())}.</p>
            <button type="button" class="btn" data-action="start-plan">Start my plan</button>`
         : wk < 1
           ? `<p>Week 1 starts ${fmtDayLong(planStart())}.</p>
              <button type="button" class="btn ghost" data-action="cancel-start">Cancel start</button>`
           : `<p>Started ${fmtDayLong(planStart())} · week ${wk} of ${PLAN_WEEKS}. Restarting keeps all your workouts, habits and scans; only the week count starts again.</p>
-             <button type="button" class="btn ghost" data-action="restart-plan">Restart from ${fmtDayLong(nextMonday())}</button>`}
+             <button type="button" class="btn ghost" data-action="restart-plan">Restart from ${fmtDayLong(nextSunday())}</button>`}
     </div>
 
     <div class="card setting">
@@ -1555,7 +1582,7 @@ function onClick(ev) {
       break;
     case 'start-plan': startPlan(); break;
     case 'restart-plan':
-      if (confirm(`Restart your plan? Week 1 will begin ${fmtDayLong(nextMonday())}. Your workouts, habits and scans are kept.`)) startPlan();
+      if (confirm(`Restart your plan? Week 1 will begin ${fmtDayLong(nextSunday())}. Your workouts, habits and scans are kept.`)) startPlan();
       break;
     case 'cancel-start': S.data.settings.startDate = null; save(); toast('Start cancelled'); route(); break;
     case 'export': exportBackup(); break;
